@@ -27,9 +27,8 @@ import org.springframework.core.annotation.AnnotationAttributes;
 import org.springframework.core.type.AnnotationMetadata;
 
 /**
- * Registers an auto proxy creator against the current {@link BeanDefinitionRegistry}
- * as appropriate based on an {@code @Enable*} annotation having {@code mode} and
- * {@code proxyTargetClass} attributes set to the correct values.
+ * 自动代理注册器，根据{@code @Enable*}注解的{@code mode}和{@code proxyTargetClass}属性注册自动代理创建器。
+ * 用于支持AOP代理和声明式事务管理等场景 。
  *
  * @author Chris Beams
  * @since 3.1
@@ -38,57 +37,54 @@ import org.springframework.core.type.AnnotationMetadata;
  */
 public class AutoProxyRegistrar implements ImportBeanDefinitionRegistrar {
 
-	private final Log logger = LogFactory.getLog(getClass());
+    private final Log logger = LogFactory.getLog(getClass());
 
-	/**
-	 * Register, escalate, and configure the standard auto proxy creator (APC) against the
-	 * given registry. Works by finding the nearest annotation declared on the importing
-	 * {@code @Configuration} class that has both {@code mode} and {@code proxyTargetClass}
-	 * attributes. If {@code mode} is set to {@code PROXY}, the APC is registered; if
-	 * {@code proxyTargetClass} is set to {@code true}, then the APC is forced to use
-	 * subclass (CGLIB) proxying.
-	 * <p>Several {@code @Enable*} annotations expose both {@code mode} and
-	 * {@code proxyTargetClass} attributes. It is important to note that most of these
-	 * capabilities end up sharing a {@linkplain AopConfigUtils#AUTO_PROXY_CREATOR_BEAN_NAME
-	 * single APC}. For this reason, this implementation doesn't "care" exactly which
-	 * annotation it finds -- as long as it exposes the right {@code mode} and
-	 * {@code proxyTargetClass} attributes, the APC can be registered and configured all
-	 * the same.
-	 */
-	@Override
-	public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
-		boolean candidateFound = false;
-		Set<String> annTypes = importingClassMetadata.getAnnotationTypes();
-		for (String annType : annTypes) {
-			AnnotationAttributes candidate = AnnotationConfigUtils.attributesFor(importingClassMetadata, annType);
-			if (candidate == null) {
-				continue;
-			}
-			Object mode = candidate.get("mode");
-			Object proxyTargetClass = candidate.get("proxyTargetClass");
-			if (mode != null && proxyTargetClass != null && AdviceMode.class == mode.getClass() &&
-					Boolean.class == proxyTargetClass.getClass()) {
-				candidateFound = true;
-				if (mode == AdviceMode.PROXY) {
-					AopConfigUtils.registerAutoProxyCreatorIfNecessary(registry);
-					if ((Boolean) proxyTargetClass) {
-						AopConfigUtils.forceAutoProxyCreatorToUseClassProxying(registry);
-						return;
-					}
-				}
-			}
-		}
-		if (!candidateFound && logger.isInfoEnabled()) {
-			String name = getClass().getSimpleName();
-			logger.info(String.format("%s was imported but no annotations were found " +
-					"having both 'mode' and 'proxyTargetClass' attributes of type " +
-					"AdviceMode and boolean respectively. This means that auto proxy " +
-					"creator registration and configuration may not have occurred as " +
-					"intended, and components may not be proxied as expected. Check to " +
-					"ensure that %s has been @Import'ed on the same class where these " +
-					"annotations are declared; otherwise remove the import of %s " +
-					"altogether.", name, name, name));
-		}
-	}
+    /**
+     * 核心方法：根据{@code @Enable*}注解的属性注册并配置自动代理创建器（APC）。
+     * 逻辑步骤：
+     * 1. 遍历导入该注册器的配置类上的所有注解，寻找包含{@code mode}和{@code proxyTargetClass}属性的注解。
+     * 2. 若{@code mode}为{@code PROXY}，注册APC；若{@code proxyTargetClass}为{@code true}，强制使用CGLIB代理 。
+     */
+    @Override
+    public void registerBeanDefinitions(AnnotationMetadata importingClassMetadata, BeanDefinitionRegistry registry) {
+        boolean candidateFound = false;
+        Set<String> annTypes = importingClassMetadata.getAnnotationTypes(); // 获取配置类上的所有注解类型
+        for (String annType : annTypes) {
+            // 提取注解属性（如@EnableTransactionManagement的mode和proxyTargetClass）
+            AnnotationAttributes candidate = AnnotationConfigUtils.attributesFor(importingClassMetadata, annType);
+            if (candidate == null) {
+                continue;
+            }
+            Object mode = candidate.get("mode"); // 获取mode属性值（PROXY或ASPECTJ）
+            Object proxyTargetClass = candidate.get("proxyTargetClass"); // 获取proxyTargetClass属性值（是否强制CGLIB）
+            
+            // 验证属性类型是否符合预期（mode为AdviceMode，proxyTargetClass为Boolean）
+            if (mode != null && proxyTargetClass != null 
+                    && AdviceMode.class == mode.getClass()
+                    && Boolean.class == proxyTargetClass.getClass()) {
+                candidateFound = true;
+                
+                // 若mode为PROXY，注册自动代理创建器
+                if (mode == AdviceMode.PROXY) {
+                    // 注册InfrastructureAdvisorAutoProxyCreator（Spring的默认APC）
+                    AopConfigUtils.registerAutoProxyCreatorIfNecessary(registry);
+                    
+                    // 若proxyTargetClass为true，强制使用CGLIB代理（而非JDK动态代理）
+                    if ((Boolean) proxyTargetClass) {
+                        AopConfigUtils.forceAutoProxyCreatorToUseClassProxying(registry);
+                        return; // 配置完成，提前退出
+                    }
+                }
+            }
+        }
+        
+        // 若未找到符合条件的注解，记录警告日志
+        if (!candidateFound && logger.isInfoEnabled()) {
+            String name = getClass().getSimpleName();
+            logger.info(String.format("%s被导入但未找到同时包含'mode'和'proxyTargetClass'属性的注解。" +
+                    "请确保%s与相关@Enable*注解在同一个配置类上被@Import。", name, name));
+        }
+    }
 
 }
+
