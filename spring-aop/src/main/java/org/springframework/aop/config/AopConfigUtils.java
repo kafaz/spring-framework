@@ -109,30 +109,58 @@ public abstract class AopConfigUtils {
 		}
 	}
 
+	/**
+	 * 注册或升级自动代理创建器（Auto-Proxy Creator）到Spring容器。
+	 * 核心逻辑：若容器中已存在代理创建器，则根据优先级决定是否替换；否则直接注册新的代理创建器。
+	 * 
+	 * @param cls 要注册的自动代理创建器类（如InfrastructureAdvisorAutoProxyCreator）
+	 * @param registry Spring容器的Bean定义注册表
+	 * @param source Bean定义的来源（通常用于跟踪配置源）
+	 * @return 注册的Bean定义（若已存在且无需替换则返回null）
+	 */
 	private static @Nullable BeanDefinition registerOrEscalateApcAsRequired(
 			Class<?> cls, BeanDefinitionRegistry registry, @Nullable Object source) {
-
+	
+		// 断言确保注册表不为空（避免NPE）
 		Assert.notNull(registry, "BeanDefinitionRegistry must not be null");
-
+	
+		// 检查容器是否已注册自动代理创建器
 		if (registry.containsBeanDefinition(AUTO_PROXY_CREATOR_BEAN_NAME)) {
+			// 获取已存在的代理创建器Bean定义
 			BeanDefinition apcDefinition = registry.getBeanDefinition(AUTO_PROXY_CREATOR_BEAN_NAME);
+			
+			// 如果当前类与已注册的代理创建器类不同，则进行优先级比较
 			if (!cls.getName().equals(apcDefinition.getBeanClassName())) {
+				// 根据类名查找优先级（数值越大优先级越高）
 				int currentPriority = findPriorityForClass(apcDefinition.getBeanClassName());
 				int requiredPriority = findPriorityForClass(cls);
+				
+				// 若现有代理创建器优先级较低，则替换为当前类
 				if (currentPriority < requiredPriority) {
 					apcDefinition.setBeanClassName(cls.getName());
 				}
 			}
+			// 已存在且无需替换时返回null
 			return null;
 		}
-
+	
+		// 创建新的RootBeanDefinition（Spring基础Bean定义实现类）
 		RootBeanDefinition beanDefinition = new RootBeanDefinition(cls);
-		beanDefinition.setSource(source);
+		beanDefinition.setSource(source); // 设置配置源
+		
+		// 设置代理创建器的执行顺序为最高优先级（确保在其他Bean之前处理）
 		beanDefinition.getPropertyValues().add("order", Ordered.HIGHEST_PRECEDENCE);
+		
+		// 标记为基础设施Bean（Spring内部使用的Bean，通常对用户透明）
 		beanDefinition.setRole(BeanDefinition.ROLE_INFRASTRUCTURE);
+		
+		// 将Bean定义注册到容器（注册名为AUTO_PROXY_CREATOR_BEAN_NAME的Bean）
 		registry.registerBeanDefinition(AUTO_PROXY_CREATOR_BEAN_NAME, beanDefinition);
+		
+		// 返回新注册的Bean定义
 		return beanDefinition;
 	}
+
 
 	private static int findPriorityForClass(Class<?> clazz) {
 		return APC_PRIORITY_LIST.indexOf(clazz);

@@ -19,7 +19,6 @@ package org.springframework.transaction.annotation;
 import org.springframework.context.annotation.AdviceMode;
 import org.springframework.context.annotation.AdviceModeImportSelector;
 import org.springframework.context.annotation.AutoProxyRegistrar;
-import org.springframework.transaction.config.TransactionManagementConfigUtils;
 import org.springframework.util.ClassUtils;
 
 /**
@@ -47,7 +46,10 @@ public class TransactionManagementConfigurationSelector extends AdviceModeImport
     protected String[] selectImports(AdviceMode adviceMode) {
         return switch (adviceMode) {
             case PROXY -> new String[] {
+				//AutoProxyRegistrar.class.getName()-> 注册 InfrastructureAdvisorAutoProxyCreator，这是一个自动代理创建器，
+				//负责为目标 Bean 生成代理对象。它会扫描所有带有 @Transactional 注解的 Bean，并为其创建代理
                 AutoProxyRegistrar.class.getName(), // 注册自动代理创建器，处理@Transactional注解 
+                // 配置事务拦截器（BeanFactoryTransactionAttributeSourceAdvisor），将事务管理逻辑（如开启、提交、回滚事务）织入到代理对象中
                 ProxyTransactionManagementConfiguration.class.getName() // 配置基于代理的事务拦截器 
             };
             case ASPECTJ -> new String[] { determineTransactionAspectClass() }; // 根据条件选择AspectJ事务切面配置
