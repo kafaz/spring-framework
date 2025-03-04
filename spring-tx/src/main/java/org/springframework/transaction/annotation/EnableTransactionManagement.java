@@ -27,17 +27,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.core.Ordered;
 
 /**
- * Enables Spring's annotation-driven transaction management capability, similar to
- * the support found in Spring's {@code <tx:*>} XML namespace. To be used on
- * {@link org.springframework.context.annotation.Configuration @Configuration}
- * classes to configure traditional, imperative transaction management or
- * reactive transaction management.
+ * 启用Spring基于注解的事务管理功能，类似于Spring XML命名空间中{@code <tx:*>}的配置支持。
+ * 该注解需在{@link org.springframework.context.annotation.Configuration @Configuration}
+ * 类上使用，用于配置传统的命令式事务管理或响应式事务管理。
  *
- * <p>The following example demonstrates imperative transaction management
- * using a {@link org.springframework.transaction.PlatformTransactionManager
- * PlatformTransactionManager}. For reactive transaction management, configure a
- * {@link org.springframework.transaction.ReactiveTransactionManager
- * ReactiveTransactionManager} instead.
+ * <p>以下示例演示了如何通过{@link org.springframework.transaction.PlatformTransactionManager
+ * PlatformTransactionManager}实现命令式事务管理。若需响应式事务管理，可配置
+ * {@link org.springframework.transaction.ReactiveTransactionManager ReactiveTransactionManager}。
  *
  * <pre class="code">
  * &#064;Configuration
@@ -46,13 +42,13 @@ import org.springframework.core.Ordered;
  *
  *     &#064;Bean
  *     public FooRepository fooRepository() {
- *         // configure and return a class having &#064;Transactional methods
+ *         // 配置并返回包含{@code @Transactional}方法的类实例
  *         return new JdbcFooRepository(dataSource());
  *     }
  *
  *     &#064;Bean
  *     public DataSource dataSource() {
- *         // configure and return the necessary JDBC DataSource
+ *         // 配置并返回所需的JDBC数据源
  *     }
  *
  *     &#064;Bean
@@ -61,47 +57,38 @@ import org.springframework.core.Ordered;
  *     }
  * }</pre>
  *
- * <p>For reference, the example above can be compared to the following Spring XML
- * configuration:
+ * <p>作为对比，以下XML配置与上述Java配置等效：
  *
  * <pre class="code">
- * &lt;beans&gt;
+ * <beans>
  *
- *     &lt;tx:annotation-driven/&gt;
+ *     <tx:annotation-driven/>
  *
- *     &lt;bean id="fooRepository" class="com.foo.JdbcFooRepository"&gt;
- *         &lt;constructor-arg ref="dataSource"/&gt;
- *     &lt;/bean&gt;
+ *     <bean id="fooRepository" class="com.foo.JdbcFooRepository">
+ *         <constructor-arg ref="dataSource"/>
+ *     </bean>
  *
- *     &lt;bean id="dataSource" class="com.vendor.VendorDataSource"/&gt;
+ *     <bean id="dataSource" class="com.vendor.VendorDataSource"/>
  *
- *     &lt;bean id="transactionManager" class="org.sfwk...DataSourceTransactionManager"&gt;
- *         &lt;constructor-arg ref="dataSource"/&gt;
- *     &lt;/bean&gt;
+ *     <bean id="transactionManager" class="org.sfwk...DataSourceTransactionManager">
+ *         <constructor-arg ref="dataSource"/>
+ *     </bean>
  *
- * &lt;/beans&gt;
+ * </beans>
  * </pre>
  *
- * In both of the scenarios above, {@code @EnableTransactionManagement} and {@code
- * <tx:annotation-driven/>} are responsible for registering the necessary Spring
- * components that power annotation-driven transaction management, such as the
- * TransactionInterceptor and the proxy- or AspectJ-based advice that weaves the
- * interceptor into the call stack when {@code JdbcFooRepository}'s {@code @Transactional}
- * methods are invoked.
+ * 在上述两种场景中，{@code @EnableTransactionManagement}和{@code <tx:annotation-driven/>}
+ * 均负责注册支撑基于注解事务管理的Spring组件，例如TransactionInterceptor以及基于代理或AspectJ的通知，
+ * 这些组件会在调用{@code JdbcFooRepository}的{@code @Transactional}方法时织入调用链。
  *
- * <p>A minor difference between the two examples lies in the naming of the {@code
- * TransactionManager} bean: In the {@code @Bean} case, the name is
- * <em>"txManager"</em> (per the name of the method); in the XML case, the name is
- * <em>"transactionManager"</em>. {@code <tx:annotation-driven/>} is hard-wired to
- * look for a bean named "transactionManager" by default, however
- * {@code @EnableTransactionManagement} is more flexible; it will fall back to a by-type
- * lookup for any {@code TransactionManager} bean in the container. Thus the name
- * can be "txManager", "transactionManager", or "tm": it simply does not matter.
+ * <p>两个示例的细微差别在于{@code TransactionManager} Bean的命名：
+ * 在{@code @Bean}示例中，名称为<em>"txManager"</em>（基于方法名）；
+ * 在XML示例中，名称为<em>"transactionManager"</em>。{@code <tx:annotation-driven/>}默认硬编码查找名为
+ * "transactionManager"的Bean，而{@code @EnableTransactionManagement}则更灵活——它会通过类型自动匹配容器中的
+ * {@code TransactionManager} Bean。因此名称可以是"txManager"、"transactionManager"或"tm"，不影响功能。
  *
- * <p>For those that wish to establish a more direct relationship between
- * {@code @EnableTransactionManagement} and the exact transaction manager bean to be used,
- * the {@link TransactionManagementConfigurer} callback interface may be implemented -
- * notice the {@code implements} clause and the {@code @Override}-annotated method below:
+ * <p>若需建立{@code @EnableTransactionManagement}与特定事务管理器Bean的直接关联，
+ * 可实现{@link TransactionManagementConfigurer}回调接口，如下所示：
  *
  * <pre class="code">
  * &#064;Configuration
@@ -110,13 +97,13 @@ import org.springframework.core.Ordered;
  *
  *     &#064;Bean
  *     public FooRepository fooRepository() {
- *         // configure and return a class having &#064;Transactional methods
+ *         // 配置并返回包含{@code @Transactional}方法的类实例
  *         return new JdbcFooRepository(dataSource());
  *     }
  *
  *     &#064;Bean
  *     public DataSource dataSource() {
- *         // configure and return the necessary JDBC DataSource
+ *         // 配置并返回所需的JDBC数据源
  *     }
  *
  *     &#064;Bean
@@ -130,23 +117,16 @@ import org.springframework.core.Ordered;
  *     }
  * }</pre>
  *
- * <p>This approach may be desirable simply because it is more explicit, or it may be
- * necessary in order to distinguish between two {@code TransactionManager} beans
- * present in the same container.  As the name suggests, the
- * {@code annotationDrivenTransactionManager()} will be the one used for processing
- * {@code @Transactional} methods. See {@link TransactionManagementConfigurer} Javadoc
- * for further details.
+ * <p>此方式的优势在于显式指定事务管理器，或在容器中存在多个{@code TransactionManager} Bean时进行区分。
+ * {@code annotationDrivenTransactionManager()}返回的实例将用于处理所有{@code @Transactional}方法。
+ * 详见{@link TransactionManagementConfigurer}的Javadoc。
  *
- * <p>The {@link #mode} attribute controls how advice is applied: If the mode is
- * {@link AdviceMode#PROXY} (the default), then the other attributes control the behavior
- * of the proxying. Please note that proxy mode allows for interception of calls through
- * the proxy only; local calls within the same class cannot get intercepted that way.
+ * <p>{@link #mode}属性控制通知的织入方式：若模式为{@link AdviceMode#PROXY}（默认值），
+ * 其他属性将控制代理行为。注意，代理模式仅拦截通过代理对象的调用，同一类中的本地方法调用无法被拦截。
  *
- * <p>Note that if the {@linkplain #mode} is set to {@link AdviceMode#ASPECTJ}, then the
- * value of the {@link #proxyTargetClass} attribute will be ignored. Note also that in
- * this case the {@code spring-aspects} module JAR must be present on the classpath, with
- * compile-time weaving or load-time weaving applying the aspect to the affected classes.
- * There is no proxy involved in such a scenario; local calls will be intercepted as well.
+ * <p>若{@linkplain #mode}设置为{@link AdviceMode#ASPECTJ}，
+ * 则{@link #proxyTargetClass}属性将被忽略。此时需确保类路径中包含{@code spring-aspects}模块JAR，
+ * 并通过编译时或加载时织入将切面应用于目标类。此模式下不使用代理，本地调用也会被拦截。
  *
  * @author Chris Beams
  * @author Juergen Hoeller
@@ -156,64 +136,52 @@ import org.springframework.core.Ordered;
  * @see ProxyTransactionManagementConfiguration
  * @see org.springframework.transaction.aspectj.AspectJTransactionManagementConfiguration
  */
-@Target(ElementType.TYPE)
-@Retention(RetentionPolicy.RUNTIME)
-@Documented
-@Import(TransactionManagementConfigurationSelector.class)
+
+/**
+ * 启用Spring的注解驱动事务管理功能，支持声明式事务管理和响应式事务管理。
+ * 该注解需标注在{@code @Configuration}配置类上，通过导入{@link TransactionManagementConfigurationSelector}
+ * 实现事务管理器的自动配置。等效于XML配置中的{@code <tx:annotation-driven/>} 。
+ *
+ * <p>核心功能：
+ * <ul>
+ *   <li>注册事务拦截器（如{@code TransactionInterceptor}）</li>
+ *   <li>支持基于代理或AspectJ的事务织入</li>
+ *   <li>提供对{@code @Transactional}注解的支持</li>
+ * </ul>
+ */
+@Target(ElementType.TYPE) // 限定该注解只能用于类、接口或枚举类型
+@Retention(RetentionPolicy.RUNTIME) // 注解在运行时保留，可通过反射读取 
+@Documented // 生成Javadoc时包含该注解
+@Import(TransactionManagementConfigurationSelector.class) // 导入事务管理配置选择器，决定使用PROXY或ASPECTJ模式
 public @interface EnableTransactionManagement {
 
-	/**
-	 * Indicate whether subclass-based (CGLIB) proxies are to be created ({@code true})
-	 * as opposed to standard Java interface-based proxies ({@code false}).
-	 * The default is {@code false}. <strong>Applicable only if {@link #mode()}
-	 * is set to {@link AdviceMode#PROXY}</strong>.
-	 * <p>Note that setting this attribute to {@code true} will affect <em>all</em>
-	 * Spring-managed beans requiring proxying, not just those marked with
-	 * {@code @Transactional}. For example, other beans marked with Spring's
-	 * {@code @Async} annotation will be upgraded to subclass proxying at the same
-	 * time. This approach has no negative impact in practice unless one is explicitly
-	 * expecting one type of proxy vs another, for example, in tests.
-	 */
-	boolean proxyTargetClass() default false;
+    /**
+     * 是否强制使用基于子类（CGLIB）的代理模式。
+     * 默认为{@code false}（使用基于接口的JDK动态代理）。
+     * <p>仅在{@link #mode()}为{@code AdviceMode.PROXY}时生效。
+     * 设置为{@code true}会影响所有需要代理的Spring Bean（如{@code @Async}）。
+     */
+    boolean proxyTargetClass() default false;
 
-	/**
-	 * Indicate how transactional advice should be applied.
-	 * <p><b>The default is {@link AdviceMode#PROXY}.</b>
-	 * Please note that proxy mode allows for interception of calls through the proxy
-	 * only. Local calls within the same class cannot get intercepted that way; an
-	 * {@link Transactional} annotation on such a method within a local call will be
-	 * ignored since Spring's interceptor does not even kick in for such a runtime
-	 * scenario. For a more advanced mode of interception, consider switching this to
-	 * {@link AdviceMode#ASPECTJ}.
-	 */
-	AdviceMode mode() default AdviceMode.PROXY;
+    /**
+     * 指定事务通知的织入方式。
+     * 默认为{@code AdviceMode.PROXY}（基于代理），可选{@code ASPECTJ}（需依赖{@code spring-aspects}）。
+     * <p>PROXY模式仅拦截外部方法调用，同一类中的内部调用无法触发事务；
+     * ASPECTJ模式通过字节码织入支持全场景拦截。
+     */
+    AdviceMode mode() default AdviceMode.PROXY;
 
-	/**
-	 * Indicate the ordering of the execution of the transaction advisor
-	 * when multiple advices are applied at a specific joinpoint.
-	 * <p>The default is {@link Ordered#LOWEST_PRECEDENCE}.
-	 */
-	int order() default Ordered.LOWEST_PRECEDENCE;
+    /**
+     * 定义事务通知的优先级（数值越小优先级越高）。
+     * 默认为{@code Ordered.LOWEST_PRECEDENCE}（最低优先级）。
+     */
+    int order() default Ordered.LOWEST_PRECEDENCE;
 
-	/**
-	 * Indicate the rollback behavior for rule-based transactions without
-	 * custom rollback rules: default is rollback on unchecked exception,
-	 * this can be switched to rollback on any exception (including checked).
-	 * <p>Note that transaction-specific rollback rules override the default
-	 * behavior but retain the chosen default for unspecified exceptions.
-	 * This is the case for Spring's {@link Transactional} as well as JTA's
-	 * {@link jakarta.transaction.Transactional} when used with Spring here.
-	 * <p>Unless you rely on EJB-style business exceptions with commit behavior,
-	 * it is advisable to switch to {@link RollbackOn#ALL_EXCEPTIONS} for a
-	 * consistent rollback even in case of a (potentially accidental) checked
-	 * exception. Also, it is advisable to make that switch for Kotlin-based
-	 * applications where there is no enforcement of checked exceptions at all.
-	 * @since 6.2
-	 * @see Transactional#rollbackFor()
-	 * @see Transactional#noRollbackFor()
-	 * @see jakarta.transaction.Transactional#rollbackOn()
-	 * @see jakarta.transaction.Transactional#dontRollbackOn()
-	 */
-	RollbackOn rollbackOn() default RollbackOn.RUNTIME_EXCEPTIONS;
-
+    /**
+     * 全局回滚规则：默认仅在未检查异常（RuntimeException）时回滚。
+     * 可设置为{@code RollbackOn.ALL_EXCEPTIONS}以包含检查型异常（checked exception）。
+     * <p>此配置会被{@code @Transactional#rollbackFor()}等方法级规则覆盖。
+     */
+    RollbackOn rollbackOn() default RollbackOn.RUNTIME_EXCEPTIONS;
 }
+

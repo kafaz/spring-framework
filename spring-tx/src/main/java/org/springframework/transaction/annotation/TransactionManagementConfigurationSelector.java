@@ -23,9 +23,8 @@ import org.springframework.transaction.config.TransactionManagementConfigUtils;
 import org.springframework.util.ClassUtils;
 
 /**
- * Selects which implementation of {@link AbstractTransactionManagementConfiguration}
- * should be used based on the value of {@link EnableTransactionManagement#mode} on the
- * importing {@code @Configuration} class.
+ * 事务管理配置选择器，根据{@link EnableTransactionManagement#mode()}的值动态选择事务管理配置类。
+ * 核心作用：通过{@code @EnableTransactionManagement}注解的{@code mode}属性，决定使用基于代理（PROXY）或AspectJ的事务管理配置。
  *
  * @author Chris Beams
  * @author Juergen Hoeller
@@ -37,25 +36,38 @@ import org.springframework.util.ClassUtils;
  */
 public class TransactionManagementConfigurationSelector extends AdviceModeImportSelector<EnableTransactionManagement> {
 
-	/**
-	 * Returns {@link ProxyTransactionManagementConfiguration} or
-	 * {@code AspectJ(Jta)TransactionManagementConfiguration} for {@code PROXY}
-	 * and {@code ASPECTJ} values of {@link EnableTransactionManagement#mode()},
-	 * respectively.
-	 */
-	@Override
-	protected String[] selectImports(AdviceMode adviceMode) {
-		return switch (adviceMode) {
-			case PROXY -> new String[] {AutoProxyRegistrar.class.getName(),
-					ProxyTransactionManagementConfiguration.class.getName()};
-			case ASPECTJ -> new String[] {determineTransactionAspectClass()};
-		};
-	}
+    /**
+     * 根据{@code mode}属性选择导入的配置类：
+     * <ul>
+     *   <li>{@code PROXY}模式：导入{@code AutoProxyRegistrar}和{@code ProxyTransactionManagementConfiguration}，启用基于动态代理的事务管理。</li>
+     *   <li>{@code ASPECTJ}模式：根据类路径是否存在JTA依赖，导入对应的AspectJ事务切面配置类。</li>
+     * </ul>
+     */
+    @Override
+    protected String[] selectImports(AdviceMode adviceMode) {
+        return switch (adviceMode) {
+            case PROXY -> new String[] {
+                AutoProxyRegistrar.class.getName(), // 注册自动代理创建器，处理@Transactional注解 
+                ProxyTransactionManagementConfiguration.class.getName() // 配置基于代理的事务拦截器 
+            };
+            case ASPECTJ -> new String[] { determineTransactionAspectClass() }; // 根据条件选择AspectJ事务切面配置
+        };
+    }
 
-	private String determineTransactionAspectClass() {
-		return (ClassUtils.isPresent("jakarta.transaction.Transactional", getClass().getClassLoader()) ?
-				TransactionManagementConfigUtils.JTA_TRANSACTION_ASPECT_CONFIGURATION_CLASS_NAME :
-				TransactionManagementConfigUtils.TRANSACTION_ASPECT_CONFIGURATION_CLASS_NAME);
-	}
+    /**
+     * 确定AspectJ事务切面的具体配置类：
+     * <ol>
+     *   <li>若类路径中存在{@code jakarta.transaction.Transactional}（JTA API），则使用JTA事务切面配置（支持分布式事务）。</li>
+     *   <li>否则使用标准的Spring事务切面配置（{@code TransactionAspectSupport}） 。</li>
+     * </ol>
+     */
+    private String determineTransactionAspectClass() {
+        return (ClassUtils.isPresent("jakarta.transaction.Transactional", getClass().getClassLoader()) ?
+                // JTA事务切面配置类（支持Jakarta EE规范）
+                TransactionManagementConfigUtils.JTA_TRANSACTION_ASPECT_CONFIGURATION_CLASS_NAME :
+                // 标准Spring事务切面配置类
+                TransactionManagementConfigUtils.TRANSACTION_ASPECT_CONFIGURATION_CLASS_NAME);
+    }
 
 }
+
