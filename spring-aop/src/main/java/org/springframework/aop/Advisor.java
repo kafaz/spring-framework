@@ -17,56 +17,41 @@
 package org.springframework.aop;
 
 import org.aopalliance.aop.Advice;
-
 /**
- * Base interface holding AOP <b>advice</b> (action to take at a joinpoint)
- * and a filter determining the applicability of the advice (such as
- * a pointcut). <i>This interface is not for use by Spring users, but to
- * allow for commonality in support for different types of advice.</i>
- *
- * <p>Spring AOP is based around <b>around advice</b> delivered via method
- * <b>interception</b>, compliant with the AOP Alliance interception API.
- * The Advisor interface allows support for different types of advice,
- * such as <b>before</b> and <b>after</b> advice, which need not be
- * implemented using interception.
- *
- * @author Rod Johnson
- * @author Juergen Hoeller
+ * Advisor接口是Spring AOP中定义切面的基础接口，它将通知（Advice）与切点（Pointcut）结合，
+ * 决定在哪些连接点（Joinpoint）应用通知逻辑。此接口为Spring内部实现服务，不直接供开发者使用。
  */
 public interface Advisor {
 
-	/**
-	 * Common placeholder for an empty {@code Advice} to be returned from
-	 * {@link #getAdvice()} if no proper advice has been configured (yet).
-	 * @since 5.0
-	 */
-	Advice EMPTY_ADVICE = new Advice() {};
+    /**
+     * 空Advice占位符，当未配置有效通知时返回此对象（例如配置错误或初始化未完成时）。
+     * 从Spring 5.0版本开始引入，用于统一空值处理。
+     */
+    Advice EMPTY_ADVICE = new Advice() {};
 
+    /**
+     * 获取与当前Advisor绑定的通知对象。通知可以是以下类型：
+     * - 方法拦截器（MethodInterceptor，实现环绕通知）
+     * - 前置通知（BeforeAdvice）
+     * - 异常通知（ThrowsAdvice）
+     * - 返回通知（AfterReturningAdvice）
+     * 通知的具体行为由实现类定义，例如AspectJMethodBeforeAdvice表示前置通知。
+     */
+    Advice getAdvice();
 
-	/**
-	 * Return the advice part of this aspect. An advice may be an
-	 * interceptor, a before advice, a throws advice, etc.
-	 * @return the advice that should apply if the pointcut matches
-	 * @see org.aopalliance.intercept.MethodInterceptor
-	 * @see BeforeAdvice
-	 * @see ThrowsAdvice
-	 * @see AfterReturningAdvice
-	 */
-	Advice getAdvice();
-
-	/**
-	 * Return whether this advice is associated with a particular instance
-	 * (for example, creating a mixin) or shared with all instances of
-	 * the advised class obtained from the same Spring bean factory.
-	 * <p><b>Note that this method is not currently used by the framework.</b>
-	 * Typical Advisor implementations always return {@code true}.
-	 * Use singleton/prototype bean definitions or appropriate programmatic
-	 * proxy creation to ensure that Advisors have the correct lifecycle model.
-	 * <p>As of 6.0.10, the default implementation returns {@code true}.
-	 * @return whether this advice is associated with a particular target instance
-	 */
-	default boolean isPerInstance() {
-		return true;
-	}
+    /**
+     * 判断当前Advisor是否与目标对象的特定实例绑定。
+     * 若返回true，表示每个目标实例拥有独立的Advisor；
+     * 若返回false，表示所有目标实例共享同一个Advisor。
+     * 当前Spring框架未直接使用此方法，开发者应通过以下方式控制生命周期：
+     * 1. 使用单例/原型作用域Bean定义
+     * 2. 通过编程式代理创建时手动管理
+     * 从Spring 6.0.10开始，默认实现返回true。
+     */
+    default boolean isPerInstance() {
+        return true;
+    }
 
 }
+
+
