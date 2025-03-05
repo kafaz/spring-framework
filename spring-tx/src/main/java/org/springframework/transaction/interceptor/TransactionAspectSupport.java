@@ -363,9 +363,12 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 
 		// 传统事务处理流程（非响应式）
 		PlatformTransactionManager ptm = asPlatformTransactionManager(tm);
+		// 生成唯一标识符,用于描述当前事务的执行上下文(方法名, 类名和事务属性) 便于后续日志的记录或者事务的管理操作
 		final String joinpointIdentification = methodIdentification(method, targetClass, txAttr);
 
 		// 处理非回调优先的事务管理器（标准事务边界控制）
+		//非回调优先的事务管理器（如 DataSourceTransactionManager）通过Spring AOP拦截方法调用，自动管理事务的生命周期 （开启、提交、回滚），无需显式调用事务管理器的API。这是声明式事务（如 @Transactional）的默认实现方式
+		// 回调优先和非回调优先的区别在于是否交由用户代码(回调内部逻辑)进行提交/回滚操作
 		if (txAttr == null || !(ptm instanceof CallbackPreferringPlatformTransactionManager cpptm)) {
 			// 创建事务并准备事务上下文
 			TransactionInfo txInfo = createTransactionIfNecessary(ptm, txAttr, joinpointIdentification);
@@ -415,6 +418,7 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 			return retVal;
 		}
 		// 处理回调优先的事务管理器（如编程式事务）
+		// 回调优先的事务管理器（如通过 TransactionTemplate 或 PlatformTransactionManager 的 execute 方法）需要显式通过回调接口控制事务 。开发者需手动定义事务边界，灵活性更高
 		else {
 			Object result;
 			final ThrowableHolder throwableHolder = new ThrowableHolder();
@@ -496,42 +500,51 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 	protected @Nullable TransactionManager determineTransactionManager(
 			@Nullable TransactionAttribute txAttr, @Nullable Class<?> targetClass) {
 
+		// 首先调用旧版本的方法（向后兼容），如果返回非空则直接使用该事务管理器
 		TransactionManager tm = determineTransactionManager(txAttr);
 		if (tm != null) {
 			return tm;
 		}
 
-		// Do not attempt to lookup tx manager if no tx attributes are set
+		// 如果没有事务属性或Bean工厂为空，则无法查找特定事务管理器，直接返回默认事务管理器
 		if (txAttr == null || this.beanFactory == null) {
 			return getTransactionManager();
 		}
 
+		// 从事务属性中获取限定符（qualifier），用于查找特定的事务管理器Bean
 		String qualifier = txAttr.getQualifier();
 		if (StringUtils.hasText(qualifier)) {
+			// 如果存在限定符，则根据限定符查找对应的事务管理器
 			return determineQualifiedTransactionManager(this.beanFactory, qualifier);
 		}
 		else if (targetClass != null) {
-			// Consider type-level qualifier annotations for transaction manager selection
+			// 如果目标类不为空，则考虑类级别的限定符注解（如@Qualifier）
 			String typeQualifier = BeanFactoryAnnotationUtils.getQualifierValue(targetClass);
 			if (StringUtils.hasText(typeQualifier)) {
 				try {
+					// 尝试根据类级别的限定符查找事务管理器
 					return determineQualifiedTransactionManager(this.beanFactory, typeQualifier);
 				}
 				catch (NoSuchBeanDefinitionException ex) {
-					// Consider type qualifier as optional, proceed with regular resolution below.
+					// 如果找不到对应的Bean，则将类限定符视为可选的，继续后续的解析逻辑
 				}
 			}
 		}
 
+		// 如果已配置了事务管理器Bean名称，则使用该名称查找事务管理器
 		if (StringUtils.hasText(this.transactionManagerBeanName)) {
 			return determineQualifiedTransactionManager(this.beanFactory, this.transactionManagerBeanName);
 		}
 		else {
+			// 尝试获取默认的事务管理器
 			TransactionManager defaultTransactionManager = getTransactionManager();
 			if (defaultTransactionManager == null) {
+				// 如果默认事务管理器为空，则从缓存中查找
 				defaultTransactionManager = this.transactionManagerCache.get(DEFAULT_TRANSACTION_MANAGER_KEY);
 				if (defaultTransactionManager == null) {
+					// 如果缓存中也没有，则从Bean工厂中获取类型为TransactionManager的唯一Bean
 					defaultTransactionManager = this.beanFactory.getBean(TransactionManager.class);
+					// 将获取到的事务管理器放入缓存，提高后续查找性能
 					this.transactionManagerCache.putIfAbsent(
 							DEFAULT_TRANSACTION_MANAGER_KEY, defaultTransactionManager);
 				}
@@ -753,78 +766,129 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 
 
 	/**
-	 * Opaque object used to hold transaction information. Subclasses
-	 * must pass it back to methods on this class, but not see its internals.
+	 * 事务信息封装类，用于保存事务管理过程中的上下文数据。
+	 * 该类通过ThreadLocal维护线程内的事务栈结构，确保嵌套事务的正确性。
 	 */
 	protected static final class TransactionInfo {
 
+		/**
+		 * 事务管理器，负责实际的事务操作（如提交、回滚）。
+		 * 可能为null（例如在非事务环境下）。
+		 */
 		private final @Nullable PlatformTransactionManager transactionManager;
 
+		/**
+		 * 事务属性，定义事务的传播行为、隔离级别等元数据。
+		 * 可能为null（例如在无事务配置的方法上）。
+		 */
 		private final @Nullable TransactionAttribute transactionAttribute;
 
+		/**
+		 * 当前连接点的标识（通常为方法签名），用于日志记录和调试。
+		 */
 		private final String joinpointIdentification;
 
+		/**
+		 * 当前事务的运行时状态（如是否新事务、是否标记回滚）。
+		 */
 		private @Nullable TransactionStatus transactionStatus;
 
+		/**
+		 * 前一个事务信息对象，用于恢复线程局部变量中的事务栈。
+		 */
 		private @Nullable TransactionInfo oldTransactionInfo;
 
-		public TransactionInfo(@Nullable PlatformTransactionManager transactionManager,
-				@Nullable TransactionAttribute transactionAttribute, String joinpointIdentification) {
+		/**
+		 * 构造方法，初始化事务管理器、事务属性和连接点标识。
+		 * @param transactionManager 事务管理器（可能为null）
+		 * @param transactionAttribute 事务属性（可能为null）
+		 * @param joinpointIdentification 连接点标识（如方法名）
+		 */
+		public TransactionInfo(
+			@Nullable PlatformTransactionManager transactionManager,
+			@Nullable TransactionAttribute transactionAttribute,
+			String joinpointIdentification) {
 
 			this.transactionManager = transactionManager;
 			this.transactionAttribute = transactionAttribute;
 			this.joinpointIdentification = joinpointIdentification;
 		}
 
+		/**
+		 * 获取事务管理器，若未设置则抛出异常。
+		 * @return 非空事务管理器
+		 */
 		public PlatformTransactionManager getTransactionManager() {
 			Assert.state(this.transactionManager != null, "No PlatformTransactionManager set");
 			return this.transactionManager;
 		}
 
+		/**
+		 * 获取事务属性（可能为null）。
+		 * @return 事务属性对象
+		 */
 		public @Nullable TransactionAttribute getTransactionAttribute() {
 			return this.transactionAttribute;
 		}
 
 		/**
-		 * Return a String representation of this joinpoint (usually a Method call)
-		 * for use in logging.
+		 * 获取当前连接点的标识（如"com.example.Service.method()"）。
+		 * @return 连接点字符串表示
 		 */
 		public String getJoinpointIdentification() {
 			return this.joinpointIdentification;
 		}
 
+		/**
+		 * 设置当前事务的运行时状态。
+		 * @param status 事务状态对象（可能为null）
+		 */
 		public void newTransactionStatus(@Nullable TransactionStatus status) {
 			this.transactionStatus = status;
 		}
 
+		/**
+		 * 获取当前事务的运行时状态（可能为null）。
+		 * @return 事务状态对象
+		 */
 		public @Nullable TransactionStatus getTransactionStatus() {
 			return this.transactionStatus;
 		}
 
 		/**
-		 * Return whether a transaction was created by this aspect,
-		 * or whether we just have a placeholder to keep ThreadLocal stack integrity.
+		 * 判断当前是否持有有效事务。
+		 * @return true若存在事务状态，否则false
 		 */
 		public boolean hasTransaction() {
 			return (this.transactionStatus != null);
 		}
 
+		/**
+		 * 将当前事务信息绑定到线程局部变量，并保存前一个事务信息。
+		 * 形成事务栈结构以支持嵌套事务。
+		 */
 		private void bindToThread() {
-			// Expose current TransactionStatus, preserving any existing TransactionStatus
-			// for restoration after this transaction is complete.
 			this.oldTransactionInfo = transactionInfoHolder.get();
 			transactionInfoHolder.set(this);
 		}
 
+		/**
+		 * 恢复线程局部变量中的前一个事务信息。
+		 * 通常在事务完成时调用，确保嵌套事务的正确回退。
+		 */
 		private void restoreThreadLocalStatus() {
-			// Use stack to restore old transaction TransactionInfo.
-			// Will be null if none was set.
 			transactionInfoHolder.set(this.oldTransactionInfo);
 		}
 
+		/**
+		 * 返回事务属性的字符串表示，用于日志输出。
+		 * @return 事务属性描述或"无事务"
+		 */
 		@Override
 		public String toString() {
-			return (this.transactionAttribute != null ? this.transactionAttribute.toString() : "No transaction");
+			return (this.transactionAttribute != null
+				? this.transactionAttribute.toString()
+				: "No transaction");
 		}
 	}
 
