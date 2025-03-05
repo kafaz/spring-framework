@@ -36,49 +36,45 @@ import org.springframework.transaction.interceptor.TransactionInterceptor;
  * @see EnableTransactionManagement
  * @see TransactionManagementConfigurationSelector
  */
-@Configuration(proxyBeanMethods = false) // 禁用代理Bean方法以提高性能 
-@Role(BeanDefinition.ROLE_INFRASTRUCTURE) // 标记为框架级基础设施Bean 
-@ImportRuntimeHints(TransactionRuntimeHints.class) // 导入AOT编译所需的运行时提示 
+@Configuration(proxyBeanMethods = false) // 禁用代理Bean方法以提高启动性能，适用于无跨Bean依赖的场景
+@Role(BeanDefinition.ROLE_INFRASTRUCTURE) // 标记为Spring框架基础设施组件，避免被应用级Bean覆盖
+@ImportRuntimeHints(TransactionRuntimeHints.class) // 注册事务管理相关的AOT编译运行时元数据（如反射配置）
 public class ProxyTransactionManagementConfiguration extends AbstractTransactionManagementConfiguration {
 
     /**
-     * 创建事务通知器，将事务属性源与拦截器绑定。
-     * 该通知器负责决定哪些方法需要被事务拦截，并定义事务行为。
-     *
-     * @param transactionAttributeSource 事务属性解析器（解析{@code @Transactional}注解）
-     * @param transactionInterceptor 事务拦截器（执行事务逻辑）
-     * @return 事务通知器实例
+	 * {@link BeanFactoryTransactionAttributeSourceAdvisor} 是 Spring 声明式事务的核心桥梁 ，通过整合事务属性解析与拦截逻辑，实现对 @Transactional 方法的透明事务管理
+     * 创建事务通知器，将事务属性解析与拦截逻辑绑定到AOP代理链
+     * 该通知器会根据@Transactional注解的定义决定是否对目标方法进行事务增强
      */
     @Bean(name = TransactionManagementConfigUtils.TRANSACTION_ADVISOR_BEAN_NAME)
     @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
     public BeanFactoryTransactionAttributeSourceAdvisor transactionAdvisor(
-            TransactionAttributeSource transactionAttributeSource, 
-            TransactionInterceptor transactionInterceptor) {
+            TransactionAttributeSource transactionAttributeSource, // 解析@Transactional注解的元数据解析器
+            TransactionInterceptor transactionInterceptor) { // 实际执行事务提交/回滚的拦截器
 
         BeanFactoryTransactionAttributeSourceAdvisor advisor = new BeanFactoryTransactionAttributeSourceAdvisor();
-        advisor.setTransactionAttributeSource(transactionAttributeSource); // 绑定事务属性源
-        advisor.setAdvice(transactionInterceptor); // 绑定事务拦截器
+        advisor.setTransactionAttributeSource(transactionAttributeSource); // 关联事务属性解析器
+        advisor.setAdvice(transactionInterceptor); // 将事务拦截器绑定到通知器
+
         if (this.enableTx != null) {
-            // 从{@code @EnableTransactionManagement}注解中读取order属性值
+            // 从@EnableTransactionManagement注解中提取order属性值，控制事务增强的优先级
             advisor.setOrder(this.enableTx.<Integer>getNumber("order"));
         }
         return advisor;
     }
 
     /**
-     * 创建事务拦截器，实现事务的提交、回滚等核心逻辑。
-     * 拦截器通过AOP机制织入到标注{@code @Transactional}的方法调用链中 。
-     *
-     * @param transactionAttributeSource 事务属性解析器，用于解析方法上的事务定义
-     * @return 事务拦截器实例
+     * 创建事务拦截器，实现事务的开启、提交、回滚等核心逻辑
+     * 该拦截器会被织入到所有匹配@Transactional注解的方法调用链中
      */
     @Bean
     @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
     public TransactionInterceptor transactionInterceptor(TransactionAttributeSource transactionAttributeSource) {
         TransactionInterceptor interceptor = new TransactionInterceptor();
-        interceptor.setTransactionAttributeSource(transactionAttributeSource); // 设置事务属性源
+        interceptor.setTransactionAttributeSource(transactionAttributeSource); // 设置事务元数据解析器
+
         if (this.txManager != null) {
-            // 若用户显式定义了事务管理器（如{@code PlatformTransactionManager}），则绑定到拦截器 
+            // 当用户显式配置PlatformTransactionManager时，将其绑定到拦截器（否则按类型自动注入）
             interceptor.setTransactionManager(this.txManager);
         }
         return interceptor;

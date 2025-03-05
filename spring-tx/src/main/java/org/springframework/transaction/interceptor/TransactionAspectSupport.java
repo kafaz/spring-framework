@@ -54,25 +54,19 @@ import org.springframework.util.ConcurrentReferenceHashMap;
 import org.springframework.util.StringUtils;
 
 /**
- * Base class for transactional aspects, such as the {@link TransactionInterceptor}
- * or an AspectJ aspect.
+ * 事务切面（如事务拦截器或AspectJ切面）的基类。
  *
- * <p>This enables the underlying Spring transaction infrastructure to be used easily
- * to implement an aspect for any aspect system.
+ * <p>通过此基类可便捷使用Spring底层事务基础设施，为任意切面系统实现事务切面。</p>
  *
- * <p>Subclasses are responsible for calling methods in this class in the correct order.
+ * <p>子类需负责按正确顺序调用本类中的方法。</p>
  *
- * <p>If no transaction name has been specified in the {@link TransactionAttribute},
- * the exposed name will be the {@code fully-qualified class name + "." + method name}
- * (by default).
+ * <p>若未在事务属性中指定事务名称，默认暴露的事务名称格式为：完整类名 + "." + 方法名。</p>
  *
- * <p>Uses the <b>Strategy</b> design pattern. A {@link PlatformTransactionManager} or
- * {@link ReactiveTransactionManager} implementation will perform the actual transaction
- * management, and a {@link TransactionAttributeSource} (for example, annotation-based) is used
- * for determining transaction definitions for a particular class or method.
+ * <p>采用策略设计模式：<br>
+ * - 事务管理策略：由具体 PlatformTransactionManager 或 ReactiveTransactionManager 实现类执行实际事务管理<br>
+ * - 事务属性源策略：通过 TransactionAttributeSource（如基于注解的实现）确定类/方法的事务定义</p>
  *
- * <p>A transaction aspect is serializable if its {@code TransactionManager} and
- * {@code TransactionAttributeSource} are serializable.
+ * <p>当事务切面的 TransactionManager 和 TransactionAttributeSource 可序列化时，该事务切面本身支持序列化。</p>
  *
  * @author Rod Johnson
  * @author Juergen Hoeller
@@ -82,11 +76,11 @@ import org.springframework.util.StringUtils;
  * @author Sebastien Deleuze
  * @author Enric Sala
  * @since 1.1
- * @see PlatformTransactionManager
- * @see ReactiveTransactionManager
- * @see #setTransactionManager
- * @see #setTransactionAttributes
- * @see #setTransactionAttributeSource
+ * @see PlatformTransactionManager        // 平台事务管理器接口
+ * @see ReactiveTransactionManager        // 响应式事务管理器接口
+ * @see #setTransactionManager            // 注入事务管理器的方法
+ * @see #setTransactionAttributes         // 设置事务属性集合的方法
+ * @see #setTransactionAttributeSource    // 设置事务属性源的方法
  */
 public abstract class TransactionAspectSupport implements BeanFactoryAware, InitializingBean {
 
@@ -167,21 +161,29 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 	}
 
 
+	// 日志记录器，用于输出事务相关的调试或监控信息，通过getClass()动态获取当前类的Class对象以绑定日志上下文
 	protected final Log logger = LogFactory.getLog(getClass());
 
+	// 响应式适配器注册表，用于支持响应式编程中的事务管理（如WebFlux），可能为null表示未启用响应式特性
 	private final @Nullable ReactiveAdapterRegistry reactiveAdapterRegistry;
 
+	// 事务管理器Bean的名称，用于从Spring容器中显式指定事务管理器实例（当存在多个事务管理器时使用）
 	private @Nullable String transactionManagerBeanName;
 
+	// 当前使用的事务管理器实例，直接负责事务的开启、提交、回滚等核心操作
 	private @Nullable TransactionManager transactionManager;
 
+	// 事务属性源，用于解析目标方法或类的事务配置（如传播行为、隔离级别、回滚规则等）
 	private @Nullable TransactionAttributeSource transactionAttributeSource;
 
+	// Spring Bean工厂引用，用于动态获取容器中的Bean（如根据名称查找事务管理器）
 	private @Nullable BeanFactory beanFactory;
 
+	// 事务管理器缓存，使用弱引用存储已解析的事务管理器实例，避免重复查找（键为事务管理器标识，如Bean名称）
 	private final ConcurrentMap<Object, TransactionManager> transactionManagerCache =
 			new ConcurrentReferenceHashMap<>(4);
 
+	// 响应式事务支持缓存，存储方法与其对应的响应式事务处理器（如Mono/Flux适配逻辑），提升重复调用性能
 	private final ConcurrentMap<Method, ReactiveTransactionSupport> transactionSupportCache =
 			new ConcurrentReferenceHashMap<>(1024);
 
@@ -327,66 +329,72 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 	 * @param invocation the callback to use for proceeding with the target invocation
 	 * @return the return value of the method, if any
 	 * @throws Throwable propagated from the target invocation
+	 * 事务拦截处理核心方法，通过环绕通知实现事务的开启、提交与回滚，支持响应式和传统事务管理
 	 */
 	protected @Nullable Object invokeWithinTransaction(Method method, @Nullable Class<?> targetClass,
 			final InvocationCallback invocation) throws Throwable {
 
-		// If the transaction attribute is null, the method is non-transactional.
+		// 获取事务属性源，用于解析当前方法的事务配置（如传播行为、隔离级别）
 		TransactionAttributeSource tas = getTransactionAttributeSource();
 		final TransactionAttribute txAttr = (tas != null ? tas.getTransactionAttribute(method, targetClass) : null);
+		// 确定当前使用的事务管理器（根据事务属性或目标类动态解析）
 		final TransactionManager tm = determineTransactionManager(txAttr, targetClass);
 
+		// 处理响应式事务场景（如WebFlux）
 		if (this.reactiveAdapterRegistry != null && tm instanceof ReactiveTransactionManager rtm) {
 			boolean isSuspendingFunction = KotlinDetector.isSuspendingFunction(method);
 			boolean hasSuspendingFlowReturnType = isSuspendingFunction &&
 					COROUTINES_FLOW_CLASS_NAME.equals(new MethodParameter(method, -1).getParameterType().getName());
 
+			// 从缓存中获取或创建响应式事务支持对象，根据方法返回类型适配响应式流（Mono/Flux）
 			ReactiveTransactionSupport txSupport = this.transactionSupportCache.computeIfAbsent(method, key -> {
-				Class<?> reactiveType =
-						(isSuspendingFunction ? (hasSuspendingFlowReturnType ? Flux.class : Mono.class) : method.getReturnType());
+				Class<?> reactiveType = (isSuspendingFunction ?
+					(hasSuspendingFlowReturnType ? Flux.class : Mono.class) : method.getReturnType());
 				ReactiveAdapter adapter = this.reactiveAdapterRegistry.getAdapter(reactiveType);
 				if (adapter == null) {
-					throw new IllegalStateException("Cannot apply reactive transaction to non-reactive return type [" +
-							method.getReturnType() + "] with specified transaction manager: " + tm);
+					throw new IllegalStateException("无法为非响应式返回类型应用响应式事务管理");
 				}
 				return new ReactiveTransactionSupport(adapter);
 			});
 
+			// 委托给响应式事务处理器执行事务逻辑
 			return txSupport.invokeWithinTransaction(method, targetClass, invocation, txAttr, rtm);
 		}
 
+		// 传统事务处理流程（非响应式）
 		PlatformTransactionManager ptm = asPlatformTransactionManager(tm);
 		final String joinpointIdentification = methodIdentification(method, targetClass, txAttr);
 
+		// 处理非回调优先的事务管理器（标准事务边界控制）
 		if (txAttr == null || !(ptm instanceof CallbackPreferringPlatformTransactionManager cpptm)) {
-			// Standard transaction demarcation with getTransaction and commit/rollback calls.
+			// 创建事务并准备事务上下文
 			TransactionInfo txInfo = createTransactionIfNecessary(ptm, txAttr, joinpointIdentification);
 
 			Object retVal;
 			try {
-				// This is an around advice: Invoke the next interceptor in the chain.
-				// This will normally result in a target object being invoked.
+				// 执行目标方法（通过拦截器链调用）
 				retVal = invocation.proceedWithInvocation();
 			}
 			catch (Throwable ex) {
-				// target invocation exception
+				// 异常处理：根据异常类型决定是否标记回滚
 				completeTransactionAfterThrowing(txInfo, ex);
 				throw ex;
 			}
 			finally {
+				// 清理当前线程的事务上下文
 				cleanupTransactionInfo(txInfo);
 			}
 
+			// 处理异步返回值（如Future）的事务同步
 			if (retVal != null && txAttr != null) {
 				TransactionStatus status = txInfo.getTransactionStatus();
 				if (status != null) {
 					if (retVal instanceof Future<?> future && future.isDone()) {
 						try {
-							future.get();
+							future.get(); // 检查异步任务结果以触发回滚
 						}
 						catch (ExecutionException ex) {
 							Throwable cause = ex.getCause();
-							Assert.state(cause != null, "Cause must not be null");
 							if (txAttr.rollbackOn(cause)) {
 								status.setRollbackOnly();
 							}
@@ -395,36 +403,37 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 							Thread.currentThread().interrupt();
 						}
 					}
+					// 处理Vavr的Try类型返回值的回滚规则
 					else if (vavrPresent && VavrDelegate.isVavrTry(retVal)) {
-						// Set rollback-only in case of Vavr failure matching our rollback rules...
 						retVal = VavrDelegate.evaluateTryFailure(retVal, txAttr, status);
 					}
 				}
 			}
 
+			// 提交事务（若未标记回滚）
 			commitTransactionAfterReturning(txInfo);
 			return retVal;
 		}
-
+		// 处理回调优先的事务管理器（如编程式事务）
 		else {
 			Object result;
 			final ThrowableHolder throwableHolder = new ThrowableHolder();
 
-			// It's a CallbackPreferringPlatformTransactionManager: pass a TransactionCallback in.
+			// 通过事务回调接口执行事务操作
 			try {
 				result = cpptm.execute(txAttr, status -> {
 					TransactionInfo txInfo = prepareTransactionInfo(ptm, txAttr, joinpointIdentification, status);
 					try {
 						Object retVal = invocation.proceedWithInvocation();
+						// 处理Vavr Try类型的返回值回滚规则
 						if (retVal != null && vavrPresent && VavrDelegate.isVavrTry(retVal)) {
-							// Set rollback-only in case of Vavr failure matching our rollback rules...
 							retVal = VavrDelegate.evaluateTryFailure(retVal, txAttr, status);
 						}
 						return retVal;
 					}
 					catch (Throwable ex) {
 						if (txAttr.rollbackOn(ex)) {
-							// A RuntimeException: will lead to a rollback.
+							// 运行时异常直接抛出触发回滚
 							if (ex instanceof RuntimeException runtimeException) {
 								throw runtimeException;
 							}
@@ -433,7 +442,7 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 							}
 						}
 						else {
-							// A normal return value: will lead to a commit.
+							// 非回滚异常暂存异常并返回null（后续提交事务）
 							throwableHolder.throwable = ex;
 							return null;
 						}
@@ -444,23 +453,25 @@ public abstract class TransactionAspectSupport implements BeanFactoryAware, Init
 				});
 			}
 			catch (ThrowableHolderException ex) {
-				throw ex.getCause();
+				throw ex.getCause(); // 抛出暂存的业务异常
 			}
 			catch (TransactionSystemException ex2) {
+				// 处理事务系统异常时保留原始业务异常
 				if (throwableHolder.throwable != null) {
-					logger.error("Application exception overridden by commit exception", throwableHolder.throwable);
+					logger.error("事务提交异常覆盖了业务异常", throwableHolder.throwable);
 					ex2.initApplicationException(throwableHolder.throwable);
 				}
 				throw ex2;
 			}
 			catch (Throwable ex2) {
+				// 处理其他未捕获异常
 				if (throwableHolder.throwable != null) {
-					logger.error("Application exception overridden by commit exception", throwableHolder.throwable);
+					logger.error("事务提交异常覆盖了业务异常", throwableHolder.throwable);
 				}
 				throw ex2;
 			}
 
-			// Check result state: It might indicate a Throwable to rethrow.
+			// 抛出暂存的业务异常（若存在）
 			if (throwableHolder.throwable != null) {
 				throw throwableHolder.throwable;
 			}

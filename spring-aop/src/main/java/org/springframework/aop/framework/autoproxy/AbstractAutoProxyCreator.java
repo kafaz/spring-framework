@@ -264,32 +264,41 @@ public abstract class AbstractAutoProxyCreator extends ProxyProcessorSupport
 
 	@Override
 	public @Nullable Object postProcessBeforeInstantiation(Class<?> beanClass, String beanName) {
+		// 根据Bean的类和名称生成缓存键，用于唯一标识该Bean的处理状态
 		Object cacheKey = getCacheKey(beanClass, beanName);
 
+		// 检查Bean名称是否为空或该Bean是否未被自定义TargetSource处理过
 		if (!StringUtils.hasLength(beanName) || !this.targetSourcedBeans.contains(beanName)) {
+			// 如果该Bean已经被处理过（记录在advisedBeans中），直接返回null以避免重复处理
 			if (this.advisedBeans.containsKey(cacheKey)) {
 				return null;
 			}
+			// 检查是否是基础设施类（如Spring内部Bean）或应跳过代理的Bean
 			if (isInfrastructureClass(beanClass) || shouldSkip(beanClass, beanName)) {
+				// 标记该Bean不需要代理，并返回null
 				this.advisedBeans.put(cacheKey, Boolean.FALSE);
 				return null;
 			}
 		}
 
-		// Create proxy here if we have a custom TargetSource.
-		// Suppresses unnecessary default instantiation of the target bean:
-		// The TargetSource will handle target instances in a custom fashion.
+		// 尝试获取自定义的TargetSource（用于控制目标Bean的实例化方式）
 		TargetSource targetSource = getCustomTargetSource(beanClass, beanName);
 		if (targetSource != null) {
+			// 如果存在自定义TargetSource，将Bean名称加入targetSourcedBeans集合，避免重复处理
 			if (StringUtils.hasLength(beanName)) {
 				this.targetSourcedBeans.add(beanName);
 			}
+			// 获取适用于当前Bean的所有增强器（Advice/Advisor）
 			Object[] specificInterceptors = getAdvicesAndAdvisorsForBean(beanClass, beanName, targetSource);
+			// 根据增强器和TargetSource创建代理对象
 			Object proxy = createProxy(beanClass, beanName, specificInterceptors, targetSource);
+			// 记录代理对象的类型，用于后续判断
 			this.proxyTypes.put(cacheKey, proxy.getClass());
+			// 返回代理对象，阻止Spring默认的实例化流程
 			return proxy;
 		}
 
+		// 若无需创建代理，返回null以继续默认的Bean实例化流程
 		return null;
 	}
 

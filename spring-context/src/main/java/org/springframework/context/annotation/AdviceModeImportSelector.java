@@ -27,7 +27,7 @@ import org.springframework.util.Assert;
 
 /**
  * 基于{@link AdviceMode}值选择导入配置的{@link ImportSelector}实现基类。
- * 专为处理类似{@code @Enable*}注解（如{@code @EnableTransactionManagement}）的{@code mode}属性设计 <button class="citation-flag" data-index="1"><button class="citation-flag" data-index="2"><button class="citation-flag" data-index="6">。
+ * 专为处理类似{@code @Enable*}注解（如{@code @EnableTransactionManagement}）的{@code mode}属性设计。
  *
  * @param <A> 包含{@link AdviceMode}属性的注解类型（如{@code EnableTransactionManagement}）
  */
@@ -40,7 +40,7 @@ public abstract class AdviceModeImportSelector<A extends Annotation> implements 
 
     /**
      * 获取注解{@code A}中定义{@link AdviceMode}属性的名称，默认返回"mode"。
-     * 子类可覆盖此方法以支持自定义属性名 <button class="citation-flag" data-index="1"><button class="citation-flag" data-index="6">。
+     * 子类可覆盖此方法以支持自定义属性名。
      */
     protected String getAdviceModeAttributeName() {
         return DEFAULT_ADVICE_MODE_ATTRIBUTE_NAME;
@@ -87,4 +87,5 @@ public abstract class AdviceModeImportSelector<A extends Annotation> implements 
      * @return 需导入的配置类全限定名数组，返回{@code null}表示无法处理该模式
      */
     protected abstract String @Nullable [] selectImports(AdviceMode adviceMode);
+}
 
