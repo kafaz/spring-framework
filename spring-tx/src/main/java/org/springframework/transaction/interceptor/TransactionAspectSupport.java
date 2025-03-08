@@ -55,17 +55,12 @@ import org.springframework.util.StringUtils;
 
 /**
  * 事务切面（如事务拦截器或AspectJ切面）的基类。
- *
  * <p>通过此基类可便捷使用Spring底层事务基础设施，为任意切面系统实现事务切面。</p>
- *
  * <p>子类需负责按正确顺序调用本类中的方法。</p>
- *
  * <p>若未在事务属性中指定事务名称，默认暴露的事务名称格式为：完整类名 + "." + 方法名。</p>
- *
  * <p>采用策略设计模式：<br>
  * - 事务管理策略：由具体 PlatformTransactionManager 或 ReactiveTransactionManager 实现类执行实际事务管理<br>
  * - 事务属性源策略：通过 TransactionAttributeSource（如基于注解的实现）确定类/方法的事务定义</p>
- *
  * <p>当事务切面的 TransactionManager 和 TransactionAttributeSource 可序列化时，该事务切面本身支持序列化。</p>
  *
  * @author Rod Johnson
